@@ -13,6 +13,7 @@ import Community from "./pages/Community";
 import PostDetail from "./pages/PostDetail";
 import Profile from "./pages/Profile";
 import UserProfile from "./pages/UserProfile";
+import FriendsList from "./pages/FriendsList"; // Added
 import RequestDetail from "./pages/RequestDetail"; // Added
 import Splash from "./pages/Splash";
 import BottomNav from "./components/BottomNav";
@@ -43,6 +44,7 @@ export default function App() {
           <Route path="/community/post/:id" element={<PostDetail />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/profile/:id" element={<UserProfile />} />
+          <Route path="/friends" element={<FriendsList />} /> {/* Added */}
           <Route path="/explore" element={<Campaigns />} />
         </Routes>
       </main>

@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { FaBell, FaCheck, FaTimes, FaCircle } from "react-icons/fa";
 import { API_BASE_URL } from '../config';
+import { useNavigate } from 'react-router-dom';
 
 export default function NotificationList({ userId, onClose }) {
+    const navigate = useNavigate();
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -26,12 +28,21 @@ export default function NotificationList({ userId, onClose }) {
         }
     }, [userId]);
 
-    const markAsRead = async (id) => {
-        try {
-            await fetch(`${API_BASE_URL}/api/notifications/${id}/read`, { method: 'PUT' });
-            setNotifications(notifications.map(n => n._id === id ? { ...n, is_read: true } : n));
-        } catch (err) {
-            console.error("Error marking as read:", err);
+    const handleNotificationClick = async (notification) => {
+        // Mark as read
+        if (!notification.is_read) {
+            try {
+                await fetch(`${API_BASE_URL}/api/notifications/${notification._id}/read`, { method: 'PUT' });
+                setNotifications(notifications.map(n => n._id === notification._id ? { ...n, is_read: true } : n));
+            } catch (err) {
+                console.error("Error marking as read:", err);
+            }
+        }
+
+        // Navigate based on type
+        if (notification.type === 'friend_request' && notification.sender_id) {
+            navigate(`/profile/${notification.sender_id._id}`);
+            if (onClose) onClose();
         }
     };
 
@@ -46,7 +57,7 @@ export default function NotificationList({ userId, onClose }) {
             {notifications.map(n => (
                 <div
                     key={n._id}
-                    onClick={() => markAsRead(n._id)}
+                    onClick={() => handleNotificationClick(n)}
                     style={{
                         padding: 15,
                         borderBottom: '1px solid rgba(255,255,255,0.1)',
