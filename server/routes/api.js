@@ -290,7 +290,7 @@ router.get('/users/:id/requests', async (req, res) => {
 // Get all campaigns
 router.get('/campaigns', async (req, res) => {
     try {
-        const campaigns = await Campaign.find().sort({ createdAt: -1 });
+        const campaigns = await Campaign.find({ status: 'approved' }).sort({ createdAt: -1 });
         res.json(campaigns);
     } catch (err) {
         res.status(500).json({ message: err.message });

@@ -1,7 +1,6 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { FaArrowLeft, FaBullhorn, FaMoneyBillWave, FaHandHoldingHeart, FaBuilding, FaUser, FaMapMarkerAlt } from 'react-icons/fa';
+import { FaArrowLeft, FaBullhorn, FaMoneyBillWave, FaHandHoldingHeart, FaBuilding, FaUser, FaMapMarkerAlt, FaCamera, FaImage } from 'react-icons/fa';
 import Modal from '../components/Modal';
 import { API_BASE_URL } from '../config';
 
@@ -23,8 +22,11 @@ export default function CreateCampaign() {
     digitalPaymentType: 'GCash',
     itemType: '',
     accountNumber: '',
-    endDate: ''
+    endDate: '',
+    image: ''
   });
+
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (isEditMode) {
@@ -45,7 +47,8 @@ export default function CreateCampaign() {
             digitalPaymentType: data.digital_payment_type || 'GCash',
             itemType: data.item_type || '',
             accountNumber: data.account_number || '',
-            endDate: data.end_date ? new Date(data.end_date).toISOString().split('T')[0] : ''
+            endDate: data.end_date ? new Date(data.end_date).toISOString().split('T')[0] : '',
+            image: data.image || ''
           });
         })
         .catch(err => console.error(err));
@@ -55,6 +58,21 @@ export default function CreateCampaign() {
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        setModal({ isOpen: true, type: 'warning', message: 'Image size should be less than 5MB' });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData(prev => ({ ...prev, image: reader.result }));
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   // Helper vars for backward compatibility
@@ -101,7 +119,8 @@ export default function CreateCampaign() {
         item_type: formData.itemType,
         account_number: formData.accountNumber,
         designated_site: formData.designatedSite,
-        end_date: formData.endDate
+        end_date: formData.endDate,
+        image: formData.image
       };
 
       const url = isEditMode ? `${API_BASE_URL}/api/campaigns/${id}` : `${API_BASE_URL}/api/campaigns`;
@@ -178,6 +197,53 @@ export default function CreateCampaign() {
       </div>
 
       <div className="glass-card" style={{ padding: 20 }}>
+
+        {/* Cover Photo Upload */}
+        <div style={{ marginBottom: 25 }}>
+          <label style={{ display: 'block', marginBottom: 10, fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>Cover Photo</label>
+          <div
+            onClick={() => fileInputRef.current.click()}
+            style={{
+              width: '100%',
+              height: 200,
+              borderRadius: 16,
+              border: '2px dashed rgba(255,255,255,0.2)',
+              background: formData.image ? `url(${formData.image}) center/cover` : 'rgba(255,255,255,0.05)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              position: 'relative',
+              overflow: 'hidden'
+            }}
+          >
+            {!formData.image && (
+              <>
+                <div style={{ width: 50, height: 50, borderRadius: '50%', background: 'rgba(0, 180, 216, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                  <FaImage size={24} color="var(--accent-color)" />
+                </div>
+                <div style={{ fontSize: 14, fontWeight: '500', color: 'rgba(255,255,255,0.8)' }}>Click to upload cover photo</div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>Recommended: 1200x600px</div>
+              </>
+            )}
+            {formData.image && (
+              <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.3)', opacity: 0, transition: 'opacity 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="hover-overlay">
+                <div style={{ background: 'rgba(0,0,0,0.6)', padding: '8px 16px', borderRadius: 20, display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <FaCamera /> Change Photo
+                </div>
+              </div>
+            )}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleImageChange}
+              accept="image/*"
+              style={{ display: 'none' }}
+            />
+          </div>
+        </div>
 
         {/* Campaign Name */}
         <div style={{ marginBottom: 20 }}>
