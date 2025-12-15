@@ -450,10 +450,15 @@ export default function Profile() {
           {activeTab === 'campaigns' && (
             user.campaigns && user.campaigns.length > 0 ? (
               user.campaigns.map(camp => (
-                <div key={camp.id} className="glass-card" style={{ padding: 15 }}>
+                <div
+                  key={camp._id || camp.id}
+                  className="glass-card"
+                  style={{ padding: 15, cursor: 'pointer' }}
+                  onClick={() => navigate(`/campaigns/${camp._id || camp.id}`)}
+                >
                   <h4 style={{ margin: '0 0 5px 0' }}>{camp.title}</h4>
                   <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
-                    Raised: ₱{camp.raised.toLocaleString()} / ₱{camp.goal.toLocaleString()}
+                    Raised: ₱{(camp.raised || 0).toLocaleString()} / ₱{(camp.target_amount || camp.goal || 0).toLocaleString()}
                   </div>
                 </div>
               ))
@@ -463,7 +468,12 @@ export default function Profile() {
           {activeTab === 'requests' && (
             requests && requests.length > 0 ? (
               requests.map(req => (
-                <div key={req._id} className="glass-card" style={{ padding: 15 }}>
+                <div
+                  key={req._id}
+                  className="glass-card"
+                  style={{ padding: 15, cursor: 'pointer' }}
+                  onClick={() => navigate(`/requests/${req._id}`)}
+                >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <h4 style={{ margin: '0 0 5px 0' }}>{req.title}</h4>
                     <span style={{

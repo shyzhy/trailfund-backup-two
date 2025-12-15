@@ -1,6 +1,8 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaUser, FaUsers, FaUserFriends, FaHandHoldingHeart, FaBoxOpen, FaCog, FaSignOutAlt, FaTimes } from 'react-icons/fa';
+import { FaUser, FaUsers, FaUserFriends, FaHandHoldingHeart, FaBoxOpen, FaCog, FaSignOutAlt, FaTimes, FaBell } from 'react-icons/fa';
+
+import NotificationList from './NotificationList'; // Should remove this too actually, next tool call
 
 export default function Sidebar({ isOpen, onClose }) {
     const navigate = useNavigate();
@@ -59,7 +61,7 @@ export default function Sidebar({ isOpen, onClose }) {
             }}>
 
                 {/* Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 40, position: 'relative' }}>
                     <div
                         onClick={() => {
                             navigate('/profile');
@@ -75,6 +77,7 @@ export default function Sidebar({ isOpen, onClose }) {
                             <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>View Profile</div>
                         </div>
                     </div>
+
                     <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
                         <FaTimes size={24} />
                     </button>

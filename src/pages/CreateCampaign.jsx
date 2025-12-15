@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { FaArrowLeft, FaBullhorn, FaBuilding, FaMoneyBillWave, FaMapMarkerAlt, FaUser } from 'react-icons/fa';
+
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { FaArrowLeft, FaBullhorn, FaMoneyBillWave, FaHandHoldingHeart, FaBuilding, FaUser, FaMapMarkerAlt } from 'react-icons/fa';
 import Modal from '../components/Modal';
 import { API_BASE_URL } from '../config';
 
 export default function CreateCampaign() {
   const navigate = useNavigate();
-  const [donationType, setDonationType] = useState('Cash');
+  const { id } = useParams(); // Get ID if editing
+  const isEditMode = !!id;
+
   const [formData, setFormData] = useState({
     title: '',
     ownerName: '',
@@ -15,61 +18,115 @@ export default function CreateCampaign() {
     targetAmount: '',
     minAmount: '',
     maxAmount: '',
-    designatedSite: 'Main Building Lobby'
+    donationType: 'Cash', // Cash, Digital, Items
+    designatedSite: 'Main Building Lobby',
+    digitalPaymentType: 'GCash',
+    itemType: '',
+    accountNumber: '',
+    endDate: ''
   });
+
+  useEffect(() => {
+    if (isEditMode) {
+      // Fetch existing campaign data
+      fetch(`${API_BASE_URL}/api/campaigns/${id}`)
+        .then(res => res.json())
+        .then(data => {
+          setFormData({
+            title: data.name,
+            ownerName: '', // User is handled by backend/localStorage, but we can't easily set it here without knowing logic
+            organization: data.organization || '',
+            description: data.description,
+            targetAmount: data.target_amount,
+            minAmount: data.min_donation,
+            maxAmount: data.max_donation,
+            donationType: data.donation_type,
+            designatedSite: data.designated_site,
+            digitalPaymentType: data.digital_payment_type || 'GCash',
+            itemType: data.item_type || '',
+            accountNumber: data.account_number || '',
+            endDate: data.end_date ? new Date(data.end_date).toISOString().split('T')[0] : ''
+          });
+        })
+        .catch(err => console.error(err));
+    }
+  }, [id, isEditMode]);
   const [modal, setModal] = useState({ isOpen: false, type: '', message: '' });
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // Helper vars for backward compatibility
+  const { donationType } = formData;
+  const setDonationType = (val) => setFormData(prev => ({ ...prev, donationType: val }));
+
   const handleSubmit = async () => {
     // 1. Validation
-    if (!formData.title || !formData.ownerName || !formData.targetAmount || !formData.description) {
+    if (!formData.title || !formData.targetAmount || !formData.description) {
       setModal({
         isOpen: true,
         type: 'warning',
-        message: 'Please fill in all required fields (Name, Owner, Amount, Description).'
+        message: 'Please fill in all required fields (Name, Amount, Description).'
       });
       return;
     }
+
+    // Check for logged in user
+    const userStr = localStorage.getItem('user');
+    if (!userStr) {
+      setModal({
+        isOpen: true,
+        type: 'warning',
+        message: 'You must be logged in to start a campaign.'
+      });
+      return;
+    }
+    const user = JSON.parse(userStr);
 
     // 2. Pending State
     setModal({ isOpen: true, type: 'pending', message: 'Submitting your campaign...' });
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/campaigns`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          donationType,
-          targetAmount: Number(formData.targetAmount),
-          minAmount: Number(formData.minAmount),
-          maxAmount: Number(formData.maxAmount)
-        })
+      const payload = {
+        user_id: user._id,
+        name: formData.title,
+        description: formData.description,
+        organization: formData.organization, // Added
+        target_amount: Number(formData.targetAmount),
+        min_donation: Number(formData.minAmount),
+        max_donation: Number(formData.maxAmount),
+        donation_type: donationType, // Correct key
+        digital_payment_type: formData.digitalPaymentType,
+        item_type: formData.itemType,
+        account_number: formData.accountNumber,
+        designated_site: formData.designatedSite,
+        end_date: formData.endDate
+      };
+
+      const url = isEditMode ? `${API_BASE_URL}/api/campaigns/${id}` : `${API_BASE_URL}/api/campaigns`;
+      const method = isEditMode ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method: method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
       });
 
       if (response.ok) {
-        // 3. Success State
         setModal({
           isOpen: true,
-          type: 'success',
-          message: 'Campaign submitted successfully! It is now pending approval.'
+          type: 'pending',
+          message: isEditMode ? 'Campaign Updated! (Pending Approval)' : 'campaign pending: requesting for approval'
         });
-        // Clear form
-        setFormData({
-          title: '',
-          ownerName: '',
-          organization: '',
-          description: '',
-          targetAmount: '',
-          minAmount: '',
-          maxAmount: '',
-          designatedSite: 'Main Building Lobby'
-        });
+        setTimeout(() => {
+          navigate(isEditMode ? `/campaigns/${id}` : '/campaigns');
+        }, 2000);
       } else {
-        throw new Error('Failed to submit');
+        const data = await response.json();
+        setModal({ isOpen: true, type: 'error', message: data.message || 'Error saving campaign' });
       }
     } catch (error) {
       // 4. Error State
@@ -83,8 +140,8 @@ export default function CreateCampaign() {
 
   const handleCloseModal = () => {
     setModal({ ...modal, isOpen: false });
-    if (modal.type === 'success') {
-      navigate('/home');
+    if (modal.message.includes('pending') || modal.message.includes('Updated')) {
+      navigate('/campaigns');
     }
   };
 
@@ -117,7 +174,7 @@ export default function CreateCampaign() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 15, marginBottom: 20 }}>
         <FaArrowLeft size={20} onClick={() => navigate(-1)} style={{ cursor: 'pointer' }} />
-        <h2 style={{ margin: 0, fontSize: 20 }}>Start a Campaign</h2>
+        <h2 style={{ margin: 0, fontSize: 24, fontWeight: 'bold' }}>{isEditMode ? 'Edit Campaign' : 'Start a Campaign'}</h2>
       </div>
 
       <div className="glass-card" style={{ padding: 20 }}>
@@ -183,6 +240,18 @@ export default function CreateCampaign() {
           />
         </div>
 
+        {/* End Date */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: 'block', marginBottom: 8, fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>End Date</label>
+          <input
+            name="endDate"
+            value={formData.endDate}
+            onChange={handleChange}
+            type="date"
+            style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white', outline: 'none' }}
+          />
+        </div>
+
         {/* Target Amount */}
         <div style={{ marginBottom: 20 }}>
           <label style={{ display: 'block', marginBottom: 8, fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>Target Amount (₱)</label>
@@ -199,31 +268,48 @@ export default function CreateCampaign() {
           </div>
         </div>
 
-        {/* Min/Max Donation */}
-        <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: 8, fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>Min Donation</label>
+        {/* Min/Max Donation (Only for Cash and Digital) */}
+        {(donationType === 'Cash' || donationType === 'Digital') && (
+          <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>Min Donation</label>
+              <input
+                name="minAmount"
+                value={formData.minAmount}
+                onChange={handleChange}
+                type="number"
+                placeholder="0.00"
+                style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white', outline: 'none' }}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>Max Donation</label>
+              <input
+                name="maxAmount"
+                value={formData.maxAmount}
+                onChange={handleChange}
+                type="number"
+                placeholder="0.00"
+                style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white', outline: 'none' }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Item Type (Only for Items) */}
+        {donationType === 'Items' && (
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: 'block', marginBottom: 8, fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>Type of Items to Receive</label>
             <input
-              name="minAmount"
-              value={formData.minAmount}
+              name="itemType"
+              value={formData.itemType}
               onChange={handleChange}
-              type="number"
-              placeholder="0.00"
+              type="text"
+              placeholder="e.g., Canned Goods, Clothes, Books"
               style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white', outline: 'none' }}
             />
           </div>
-          <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: 8, fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>Max Donation</label>
-            <input
-              name="maxAmount"
-              value={formData.maxAmount}
-              onChange={handleChange}
-              type="number"
-              placeholder="0.00"
-              style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white', outline: 'none' }}
-            />
-          </div>
-        </div>
+        )}
 
         {/* Donation Type */}
         <div style={{ marginBottom: 20 }}>
@@ -250,32 +336,80 @@ export default function CreateCampaign() {
           </div>
         </div>
 
-        {/* Designated Site */}
-        <div style={{ marginBottom: 20 }}>
-          <label style={{ display: 'block', marginBottom: 8, fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>Designated Donation Site</label>
-          <div style={{ position: 'relative' }}>
-            <FaMapMarkerAlt style={{ position: 'absolute', left: 15, top: 14, color: 'rgba(255,255,255,0.6)' }} />
-            <select
-              name="designatedSite"
-              value={formData.designatedSite}
-              onChange={handleChange}
-              style={{ width: '100%', padding: '12px 12px 12px 45px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.2)', background: '#002840', color: 'white', outline: 'none' }}
-            >
-              <option>Main Building Lobby</option>
-              <option>Student Center Office</option>
-              <option>Library Drop-off</option>
-              <option>Gymnasium</option>
-            </select>
+        {/* Digital Payment Type (Only for Digital) */}
+        {donationType === 'Digital' && (
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: 'block', marginBottom: 12, fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>Select Payment Platform</label>
+            <div style={{ display: 'flex', gap: 15 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type="radio"
+                    name="digitalPaymentType"
+                    value="GCash"
+                    checked={formData.digitalPaymentType === 'GCash'}
+                    onChange={handleChange}
+                    style={{ marginRight: 8 }}
+                  />
+                  <span>GCash</span>
+                </div>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type="radio"
+                    name="digitalPaymentType"
+                    value="PayMaya"
+                    checked={formData.digitalPaymentType === 'PayMaya'}
+                    onChange={handleChange}
+                    style={{ marginRight: 8 }}
+                  />
+                  <span>PayMaya</span>
+                </div>
+              </label>
+            </div>
+            <div style={{ marginTop: 15 }}>
+              <label style={{ display: 'block', marginBottom: 8, fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>Account Number / Mobile</label>
+              <input
+                name="accountNumber"
+                value={formData.accountNumber}
+                onChange={handleChange}
+                type="number"
+                placeholder="09XXXXXXXXX"
+                style={{ width: '100%', padding: 12, borderRadius: 12, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white', outline: 'none' }}
+              />
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Designated Site (Hidden for Digital) */}
+        {donationType !== 'Digital' && (
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: 'block', marginBottom: 8, fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>Designated Donation Site</label>
+            <div style={{ position: 'relative' }}>
+              <FaMapMarkerAlt style={{ position: 'absolute', left: 15, top: 14, color: 'rgba(255,255,255,0.6)' }} />
+              <select
+                name="designatedSite"
+                value={formData.designatedSite}
+                onChange={handleChange}
+                style={{ width: '100%', padding: '12px 12px 12px 45px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.2)', background: '#002840', color: 'white', outline: 'none' }}
+              >
+                <option>Main Building Lobby</option>
+                <option>Student Center Office</option>
+                <option>Library Drop-off</option>
+                <option>Gymnasium</option>
+              </select>
+            </div>
+          </div>
+        )}
 
         {/* Submit Button */}
         <button
           onClick={handleSubmit}
           className="btn"
-          style={{ width: '100%', marginTop: 10, background: 'var(--accent-color)', color: 'white', padding: 15, fontSize: 16 }}
+          style={{ width: '100%', padding: 15, borderRadius: 30, background: 'var(--accent-color)', color: 'white', fontWeight: 'bold', fontSize: 16, marginTop: 20 }}
         >
-          Submit for Approval
+          {isEditMode ? 'Save Changes' : 'Submit for Approval'}
         </button>
 
       </div>

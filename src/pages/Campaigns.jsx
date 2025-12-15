@@ -16,6 +16,9 @@ export default function Campaigns() {
   const [showFilter, setShowFilter] = useState(false);
   const [filterType, setFilterType] = useState(initialTab); // 'campaigns' or 'requests'
   const [filterUrgency, setFilterUrgency] = useState('All'); // 'All', 'High', 'Medium', 'Low'
+  const [filterDonationType, setFilterDonationType] = useState('All');
+  const [filterOrganization, setFilterOrganization] = useState(''); // Added
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     // Fetch Campaigns
@@ -61,14 +64,50 @@ export default function Campaigns() {
     setShowFilter(false);
   };
 
+  const filteredCampaigns = campaigns.filter(c => {
+    // 1. Search Filter
+    const title = c.title || c.name || '';
+    const summary = c.summary || c.description || '';
+    const matchesSearch = title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      summary.toLowerCase().includes(searchQuery.toLowerCase());
+
+    // 2. Donation Type Filter
+    const matchesType = filterDonationType === 'All' || c.donation_type === filterDonationType;
+
+    // 3. Organization Filter
+    const org = c.organization || '';
+    const matchesOrg = filterOrganization === '' || org.toLowerCase().includes(filterOrganization.toLowerCase());
+
+    return matchesSearch && matchesType && matchesOrg;
+  });
+
   const filteredRequests = requests.filter(r => {
-    if (filterUrgency === 'All') return true;
-    // Map backend urgency (Green/Yellow/Red) to frontend filter (Low/Medium/High) if needed
-    // Or just assume frontend filter matches backend values if we update filter options
-    // Let's map for now to be safe based on previous task
     const urgencyMap = { 'Green': 'Low', 'Yellow': 'Medium', 'Red': 'High' };
     const mappedUrgency = urgencyMap[r.urgency] || r.urgency;
-    return mappedUrgency === filterUrgency;
+
+    // 1. Urgency Filter
+    const matchesUrgency = filterUrgency === 'All' || mappedUrgency === filterUrgency;
+
+    // 2. Donation Type Filter
+    // Allow partial matching or direct mapping.
+    // Request Types: Cash, Item, Digital, Gift, Service, Resource
+    // Filter Types: Cash, Digital, Items
+    let matchesType = true;
+    if (filterDonationType !== 'All') {
+      if (filterDonationType === 'Items') {
+        matchesType = r.request_type === 'Item' || r.request_type === 'Items';
+      } else {
+        matchesType = r.request_type === filterDonationType;
+      }
+    }
+
+    // 3. Search Filter
+    const title = r.title || '';
+    const description = r.description || '';
+    const matchesSearch = title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      description.toLowerCase().includes(searchQuery.toLowerCase());
+
+    return matchesUrgency && matchesType && matchesSearch;
   });
 
   return (
@@ -118,7 +157,7 @@ export default function Campaigns() {
           alignItems: 'center',
           padding: 20
         }} onClick={() => setShowFilter(false)}>
-          <div className="glass-card" style={{ width: '100%', maxWidth: 400, padding: 25, background: '#002840' }} onClick={e => e.stopPropagation()}>
+          <div className="glass-card" style={{ width: '100%', maxWidth: 400, padding: 25, background: '#002840', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
             <h3 style={{ marginTop: 0, marginBottom: 20 }}>Filter Options</h3>
 
             {/* Type Selection */}
@@ -155,6 +194,44 @@ export default function Campaigns() {
                 </button>
               </div>
             </div>
+
+            {/* Donation Type Filter */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', marginBottom: 10, fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>Donation Option</label>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {['All', 'Cash', 'Digital', 'Items'].map(type => (
+                  <button key={type}
+                    onClick={() => setFilterDonationType(type)}
+                    style={{
+                      padding: '8px 16px', borderRadius: 20, border: 'none',
+                      background: filterDonationType === type ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)',
+                      color: 'white',
+                      cursor: 'pointer'
+                    }}>
+                    {type}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Organization Filter (Only for Campaigns) */}
+            {filterType === 'campaigns' && (
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'block', marginBottom: 10, fontSize: 14, color: 'rgba(255,255,255,0.7)' }}>Organization</label>
+                <input
+                  type="text"
+                  value={filterOrganization}
+                  onChange={(e) => setFilterOrganization(e.target.value)}
+                  placeholder="Filter by Organization..."
+                  style={{
+                    width: '100%', padding: 12, borderRadius: 12,
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    background: 'rgba(255,255,255,0.05)',
+                    color: 'white', outline: 'none'
+                  }}
+                />
+              </div>
+            )}
 
             {/* Urgency Selection (Only if Requests is selected) */}
             {filterType === 'requests' && (
@@ -232,8 +309,8 @@ export default function Campaigns() {
       {/* Content List */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {activeTab === 'campaigns' ? (
-          campaigns.map(c => (
-            <div key={c.id} className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+          filteredCampaigns.map(c => (
+            <div key={c._id || c.id} className="glass-card" style={{ padding: 20, marginBottom: 20 }}>
               {/* Campaign Card Content (Same as before) */}
               <div style={{ height: 160, position: 'relative' }}>
                 <img
@@ -252,7 +329,7 @@ export default function Campaigns() {
                   fontWeight: 'bold',
                   backdropFilter: 'blur(4px)'
                 }}>
-                  {c.daysLeft} days left
+                  {c.end_date ? Math.ceil((new Date(c.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : 0} days left
                 </div>
               </div>
 
@@ -268,20 +345,46 @@ export default function Campaigns() {
                   </div>
                 </div>
 
-                <h3 style={{ margin: '0 0 8px 0', fontSize: 18, fontWeight: 'bold' }}>{c.title}</h3>
-                <p style={{ margin: '0 0 16px 0', fontSize: 14, color: 'rgba(255,255,255,0.7)', lineHeight: 1.5 }}>{c.summary}</p>
+                <h3 style={{ margin: '0 0 8px 0', fontSize: 18, fontWeight: 'bold' }}>{c.title || c.name}</h3>
+                <p style={{
+                  margin: '0 0 16px 0',
+                  fontSize: 14,
+                  color: 'rgba(255,255,255,0.7)',
+                  lineHeight: 1.5,
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}>
+                  {c.summary || c.description}
+                </p>
 
                 <div style={{ marginBottom: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
-                    <span style={{ color: 'var(--accent-color)', fontWeight: 'bold' }}>₱{(c.raised || 0).toLocaleString()}</span>
-                    <span style={{ color: 'rgba(255,255,255,0.6)' }}>of ₱{(c.goal || 0).toLocaleString()}</span>
-                  </div>
-                  <div style={{ width: '100%', height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3 }}>
-                    <div style={{ width: `${((c.raised || 0) / (c.goal || 1)) * 100}%`, height: '100%', background: 'var(--accent-color)', borderRadius: 3 }} />
-                  </div>
+                  {c.donation_type === 'Items' ? (
+                    <div style={{ background: 'rgba(255,255,255,0.1)', padding: 10, borderRadius: 8 }}>
+                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>Collecting</div>
+                      <div style={{ fontWeight: 'bold', fontSize: 15, color: 'var(--accent-color)' }}>{c.item_type || 'Various Items'}</div>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
+                        <span style={{ color: 'var(--accent-color)', fontWeight: 'bold' }}>₱{(c.raised || 0).toLocaleString()}</span>
+                        <span style={{ color: 'rgba(255,255,255,0.6)' }}>of ₱{(c.target_amount || c.goal || 0).toLocaleString()}</span>
+                      </div>
+                      <div style={{ width: '100%', height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3 }}>
+                        <div style={{ width: `${((c.raised || 0) / (c.target_amount || c.goal || 1)) * 100}%`, height: '100%', background: 'var(--accent-color)', borderRadius: 3 }} />
+                      </div>
+                      {c.donation_type === 'Digital' && c.digital_payment_type && (
+                        <div style={{ fontSize: 11, marginTop: 5, color: 'rgba(255,255,255,0.5)', textAlign: 'right' }}>
+                          Via {c.digital_payment_type} {c.account_number ? `(${c.account_number})` : ''}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
 
-                <Link to={`/campaigns/${c.id}`} style={{ textDecoration: 'none' }}>
+                <Link to={`/campaigns/${c._id}`} style={{ textDecoration: 'none' }}>
                   <button className="btn" style={{ width: '100%', background: 'var(--accent-color)', color: 'white', padding: 12 }}>View Details</button>
                 </Link>
               </div>
@@ -291,7 +394,10 @@ export default function Campaigns() {
           filteredRequests.map(r => (
             <div key={r._id} className="glass-card" style={{ padding: 20 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 'bold' }}>{r.title}</h3>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 18, fontWeight: 'bold' }}>{r.title}</h3>
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{r.request_type}</span>
+                </div>
                 <span style={{
                   background: r.urgency === 'Red' ? 'rgba(220, 53, 69, 0.2)' : r.urgency === 'Yellow' ? 'rgba(255, 193, 7, 0.2)' : 'rgba(40, 167, 69, 0.2)',
                   color: r.urgency === 'Red' ? '#dc3545' : r.urgency === 'Yellow' ? '#ffc107' : '#28a745',
@@ -303,10 +409,55 @@ export default function Campaigns() {
                   {r.urgency === 'Green' ? 'Low' : r.urgency === 'Yellow' ? 'Moderate' : 'High'} Priority
                 </span>
               </div>
-              <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', marginBottom: 15 }}>
-                Requested by <span style={{ color: 'white', fontWeight: 'bold' }}>{r.user_id?.name || 'Unknown'}</span> • {r.location}
+
+              <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', marginBottom: 15, lineHeight: 1.5 }}>
+                {r.description}
               </p>
-              <button className="btn" style={{ width: '100%', background: 'rgba(255,255,255,0.1)', color: 'white', padding: 10 }}>View Request</button>
+
+              <div style={{ background: 'rgba(0,0,0,0.2)', padding: 15, borderRadius: 12, marginBottom: 15, fontSize: 13 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>Location</div>
+                    <div style={{ fontWeight: 500 }}>{r.location}</div>
+                  </div>
+                  {(r.request_type === 'Cash' || r.request_type === 'Gift') && r.meetup_time && (
+                    <div>
+                      <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>Meetup Time</div>
+                      <div style={{ fontWeight: 500 }}>{r.meetup_time}</div>
+                    </div>
+                  )}
+                  {r.request_type === 'Item' && r.item_type && (
+                    <div>
+                      <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>Item Type</div>
+                      <div style={{ fontWeight: 500 }}>{r.item_type}</div>
+                    </div>
+                  )}
+                  {r.request_type === 'Digital' && (
+                    <>
+                      <div>
+                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>Min Donation</div>
+                        <div style={{ fontWeight: 500 }}>₱{(r.min_donation || 0).toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>Max Donation</div>
+                        <div style={{ fontWeight: 500 }}>₱{(r.max_donation || 0).toLocaleString()}</div>
+                      </div>
+                    </>
+                  )}
+                  {r.hashtags && (
+                    <div style={{ gridColumn: '1 / -1', marginTop: 5 }}>
+                      <div style={{ color: 'var(--accent-color)', fontSize: 12 }}>{r.hashtags}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
+                <span>Requested by <span style={{ color: 'white', fontWeight: 'bold' }}>{r.user_id?.name || 'Unknown'}</span></span>
+                <Link to={`/requests/${r._id}`} style={{ textDecoration: 'none' }}>
+                  <button className="btn" style={{ background: 'rgba(255,255,255,0.1)', color: 'white', padding: '8px 16px', fontSize: 12 }}>Full Details</button>
+                </Link>
+              </div>
             </div>
           ))
         )}

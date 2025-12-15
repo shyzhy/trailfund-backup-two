@@ -4,10 +4,12 @@ import { FaSearch, FaSlidersH, FaBell, FaBars, FaCheck } from "react-icons/fa";
 import { API_BASE_URL } from '../config';
 
 import Sidebar from "../components/Sidebar";
+import NotificationList from "../components/NotificationList";
 // Removed mock imports
 
 export default function Home() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false); // Added
   const [campaigns, setCampaigns] = useState([]);
   const [users, setUsers] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -119,8 +121,35 @@ export default function Home() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <FaBars size={24} color="white" onClick={(e) => { e.stopPropagation(); setIsSidebarOpen(true); }} style={{ cursor: 'pointer' }} />
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-          <FaBell size={24} color="white" />
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', position: 'relative' }}>
+
+          {/* Notification Bell */}
+          <div onClick={(e) => { e.stopPropagation(); setShowNotifications(!showNotifications); }} style={{ cursor: 'pointer', position: 'relative' }}>
+            <FaBell size={24} color="white" />
+            {/* We could add red dot here if unread count > 0 */}
+          </div>
+
+          {/* Notification Dropdown */}
+          {showNotifications && (
+            <div style={{
+              position: 'absolute',
+              top: 40,
+              right: 0,
+              width: 300,
+              background: '#002840',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 12,
+              boxShadow: '0 5px 20px rgba(0,0,0,0.5)',
+              zIndex: 1001,
+              overflow: 'hidden'
+            }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ padding: '10px 15px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontWeight: 'bold', color: 'white' }}>
+                Notifications
+              </div>
+              {currentUser && <NotificationList userId={currentUser._id} />}
+            </div>
+          )}
+
           <Link to={currentUser ? '/profile' : '/login'}>
             <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.2)', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.3)' }}>
               <img src={currentUser?.profile_picture || "/assets/giselle.jpg"} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />

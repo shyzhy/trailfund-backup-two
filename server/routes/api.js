@@ -5,6 +5,7 @@ const Request = require('../models/Request');
 const Post = require('../models/Post');
 const User = require('../models/User');
 const Comment = require('../models/Comment');
+const Notification = require('../models/Notification');
 
 // --- USERS ---
 
@@ -166,6 +167,17 @@ router.get('/campaigns', async (req, res) => {
     }
 });
 
+// Get single campaign
+router.get('/campaigns/:id', async (req, res) => {
+    try {
+        const campaign = await Campaign.findById(req.params.id);
+        if (!campaign) return res.status(404).json({ message: 'Campaign not found' });
+        res.json(campaign);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
 // Create a campaign
 router.post('/campaigns', async (req, res) => {
     const campaign = new Campaign(req.body);
@@ -189,6 +201,19 @@ router.get('/requests', async (req, res) => {
     }
 });
 
+// Get single request
+router.get('/requests/:id', async (req, res) => {
+    try {
+        const request = await Request.findById(req.params.id)
+            .populate('user_id', 'name username profile_picture')
+            .populate('fulfillments.user_id', 'name username profile_picture');
+        if (!request) return res.status(404).json({ message: 'Request not found' });
+        res.json(request);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
 // Create a request
 router.post('/requests', async (req, res) => {
     const request = new Request(req.body);
@@ -197,6 +222,38 @@ router.post('/requests', async (req, res) => {
         res.status(201).json(newRequest);
     } catch (err) {
         res.status(400).json({ message: err.message });
+    }
+});
+
+// Register interest/fulfillment for a request
+router.post('/requests/:id/fulfill', async (req, res) => {
+    const { user_id } = req.body;
+    try {
+        const request = await Request.findById(req.params.id);
+        if (!request) return res.status(404).json({ message: 'Request not found' });
+
+        // Check if already interested
+        if (request.fulfillments.some(f => f.user_id.toString() === user_id)) {
+            return res.status(400).json({ message: 'You have already contacted this request.' });
+        }
+
+        // Create Notification for Request Owner
+        if (request.user_id.toString() !== user_id) {
+            const notification = new Notification({
+                recipient_id: request.user_id,
+                sender_id: user_id,
+                type: 'request_fulfillment',
+                message: `has contacted you regarding your request: ${request.title}`,
+                related_id: request._id
+            });
+            await notification.save();
+        }
+
+        request.fulfillments.push({ user_id });
+        await request.save();
+        res.json(request);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
     }
 });
 
@@ -302,6 +359,103 @@ router.post('/posts/:id/comments', async (req, res) => {
     } catch (err) {
         console.error('Error saving comment:', err);
         res.status(400).json({ message: err.message });
+    }
+});
+
+// Delete a campaign
+router.delete('/campaigns/:id', async (req, res) => {
+    try {
+        await Campaign.findByIdAndDelete(req.params.id);
+        res.json({ message: 'Campaign deleted' });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// Delete a request
+router.delete('/requests/:id', async (req, res) => {
+    try {
+        await Request.findByIdAndDelete(req.params.id);
+        res.json({ message: 'Request deleted' });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// Update a campaign
+router.put('/campaigns/:id', async (req, res) => {
+    try {
+        const updatedCampaign = await Campaign.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        res.json(updatedCampaign);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// Update a request
+router.put('/requests/:id', async (req, res) => {
+    try {
+        const updatedRequest = await Request.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        res.json(updatedRequest);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// Approve a campaign
+router.post('/campaigns/:id/approve', async (req, res) => {
+    const { user_id } = req.body; // Faculty ID
+    try {
+        const campaign = await Campaign.findById(req.params.id);
+        if (!campaign) return res.status(404).json({ message: 'Campaign not found' });
+
+        const faculty = await User.findById(user_id);
+        if (!faculty || faculty.role !== 'faculty') {
+            return res.status(403).json({ message: 'Only faculty can approve campaigns' });
+        }
+
+        campaign.status = 'approved';
+        campaign.approved_by = user_id;
+        campaign.date_approved = Date.now();
+        await campaign.save();
+
+        // Create Notification for Campaign Owner
+        const notification = new Notification({
+            recipient_id: campaign.user_id,
+            sender_id: user_id,
+            type: 'campaign_approved',
+            message: `has approved your campaign: ${campaign.name}`,
+            related_id: campaign._id
+        });
+        await notification.save();
+
+        res.json(campaign);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// --- NOTIFICATIONS ---
+
+// Get notifications for a user
+router.get('/notifications/:userId', async (req, res) => {
+    try {
+        const notifications = await Notification.find({ recipient_id: req.params.userId })
+            .populate('sender_id', 'name username profile_picture')
+            .sort({ date: -1 });
+        res.json(notifications);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// Mark notification as read
+router.put('/notifications/:id/read', async (req, res) => {
+    try {
+        const notification = await Notification.findByIdAndUpdate(req.params.id, { is_read: true }, { new: true });
+        res.json(notification);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
     }
 });
 
